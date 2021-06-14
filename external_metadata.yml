@@ -1,0 +1,29 @@
+schema_version: "master"
+name: "ch.swisstopo.swissboundaries3d_gemeinde_flaeche.fill"
+meta_data_source: "https://www.geocat.ch/geonetwork/srv/ger/xml_iso19139?uuid=9961dc6c-20a9-4b16-8a24-b20c3d8ddb83"
+meta_data_source_xml: "https://www.geocat.ch/geonetwork/srv/api/records/9961dc6c-20a9-4b16-8a24-b20c3d8ddb83/formatters/xml?attachment=true"
+roles: []
+archive:
+  after: 60
+  keep: 3
+legal_bases: []
+provider:
+  name: "Amt für Geoinformation SO"
+  abbreviation: "AGI"
+  street: "Rötistrasse"
+  number: "4"
+  zip-code: "4502"
+  city: "Solothurn"
+  country: "Schweiz"
+  address:
+  first_name:
+  last_name:
+  phone: "+41 32 627 75 92"
+  email: "agi@bd.so.ch"
+  url: "https://geo.so.ch"
+  hours_of_service: "Mo-Fr: 10:00-11:30 + 14:00-16:00"
+depends_on: []
+access_authorisation_level: "Zugangsberechtigungsstufe A - Die Geodaten sind nicht öffentlich zugänglich. Es gelten die Nutzungsbedingungen des Kantons Solothurn."
+published_as:
+  - "db"
+  - "wms"

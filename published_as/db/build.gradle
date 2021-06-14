@@ -1,0 +1,42 @@
+import ch.so.agi.gretl.tasks.*
+import ch.so.agi.gretl.api.*
+
+def db_settings = ['jdbc:postgresql://localhost/gretl', 'gretl', 'gretl']
+
+apply plugin: 'ch.so.agi.gretl'
+
+buildscript {
+	repositories {
+		flatDir {
+			dirs '/libs'
+		}
+		maven {
+			url "http://jars.interlis.ch"
+		}
+		maven {
+			url "http://jars.umleditor.org"
+		}
+		maven {
+			url "https://plugins.gradle.org/m2/"
+		}
+		mavenCentral()
+	}
+	dependencies {
+		classpath(
+			[group: 'ch.so.agi', name: 'gretl',  version: '2.0.200']
+		)
+	}
+}
+
+defaultTasks 'executeSql'
+
+task executeSql(type: SqlExecutor){
+    database = db_settings
+    sqlFiles = [
+			'gemeindegrenzen_basel_land.sql',
+			'gemeindegrenzen_schweiz.sql',
+			'kantonsgrenze_basel_land.sql',
+			'kantonsgrenzen_schweiz.sql',
+			'kantonsgrenze_basel_land.sql'
+		]
+}

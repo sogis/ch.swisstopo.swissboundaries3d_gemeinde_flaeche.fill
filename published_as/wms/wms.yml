@@ -1,0 +1,118 @@
+unqualified_imports:
+  - "GeometryCHLV95_V1"
+  - "CHAdminCodes_V1"
+imports: []
+depends_on: []
+layers:
+  - name: "gemeindegrenzen"
+    title: "Gemeindegrenzen"
+    description: "Gemeindegrenzen des Kantons Basel-Landschaft"
+    roles:
+    restriction_area_types:
+    license: "none"
+    fees: "none"
+    access_authorisation_level: "Zugangsberechtigungsstufe A - Die Geodaten sind nicht öffentlich zugänglich. Es gelten die Nutzungsbedingungen des Kantons Basel-Landschaft."
+    access_constraints: "none"
+    extra_dimension: false
+    extra_dimension_default:
+    extra_dimension_extent:
+    extra_dimension_item:
+    srs:
+      - "EPSG:2056"
+      - "EPSG:21781"
+      - "EPSG:3857"
+    class_item:
+    label_item:
+    geometry_style_type: "polygon"
+    geometry_column: "geom"
+    id_column: "gemeinde_id_bfs"
+    queryable: true
+    columns:
+      - name: "gemeinde_id_bfs"
+        title: "Gemeinde ID BFS"
+        roles:
+        data_type: "CHAdminCodes_V1.CHMunicipalityCode"
+        queryable: false
+      - name: "gemeindename"
+        title: "Gemeindename"
+        roles:
+        data_type: "TEXT"
+        queryable: true
+      - name: "geom"
+        title: "Geometrie"
+        roles:
+        data_type: "MultiSurface"
+        queryable: false
+  - name: "kantonsgrenze"
+    title: "Kantonsgrenze"
+    description: "Grenze des Kantons Basel-Landschaft"
+    roles:
+    restriction_area_types:
+    license: "none"
+    fees: "none"
+    access_authorisation_level: "Zugangsberechtigungsstufe A - Die Geodaten sind nicht öffentlich zugänglich. Es gelten die Nutzungsbedingungen des Kantons Basel-Landschaft."
+    access_constraints: "none"
+    extra_dimension: false
+    extra_dimension_default:
+    extra_dimension_extent:
+    extra_dimension_item:
+    srs:
+      - "EPSG:2056"
+      - "EPSG:21781"
+      - "EPSG:3857"
+    class_item:
+    label_item:
+    geometry_style_type: "polygon"
+    geometry_column: "geom"
+    id_column: "kanton_id_bfs"
+    queryable: true
+    columns:
+      - name: "kanton_id_bfs"
+        title: "Kanton ID BFS"
+        roles:
+        data_type: "0 .. 99"
+        queryable: false
+      - name: "kantonsname"
+        title: "Kantonsname"
+        roles:
+        data_type: "TEXT"
+        queryable: true
+      - name: "geom"
+        title: "Geometrie"
+        roles:
+        data_type: "MultiSurface"
+        queryable: false
+  - name: "landesgrenze"
+    title: "Landesgrenze"
+    description: "Grenze der schweizerischen Eiggenossenschaft"
+    roles:
+    restriction_area_types:
+    license: "none"
+    fees: "none"
+    access_authorisation_level: "Zugangsberechtigungsstufe A - Die Geodaten sind nicht öffentlich zugänglich. Es gelten die Nutzungsbedingungen des Kantons Basel-Landschaft."
+    access_constraints: "none"
+    extra_dimension: false
+    extra_dimension_default:
+    extra_dimension_extent:
+    extra_dimension_item:
+    srs:
+      - "EPSG:2056"
+      - "EPSG:21781"
+      - "EPSG:3857"
+    class_item:
+    label_item:
+    geometry_style_type: "polygon"
+    geometry_column: "geom"
+    id_column: "t_id"
+    queryable: true
+    columns:
+      - name: "landesname"
+        title: "Landesname"
+        roles:
+        data_type: "TEXT"
+        queryable: true
+      - name: "geom"
+        title: "Geometrie"
+        roles:
+        data_type: "Surface"
+        queryable: false

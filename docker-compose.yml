@@ -1,0 +1,26 @@
+version: '3.7'
+
+services:
+
+  postgis:
+    image: postgis-local:3.0.3-postgres12
+    environment:
+      POSTGRESQL_USER: gretl
+      POSTGRESQL_PASSWORD: gretl
+      POSTGRESQL_ADMIN_PASSWORD: gretl
+      POSTGRESQL_DATABASE: gretl
+    ports:
+      - "5432:5432"
+
+  gretl:
+    image: registry.gitlab.com/geo-bl-ch/docker/gretl-runner:latest
+    environment:
+      - JAVA_OPTS=-XX:+UseContainerSupport -XX:InitialRAMPercentage=75.0 -XX:MinRAMPercentage=50.0 -XX:MaxRAMPercentage=75.0
+      - AWSK=
+      - AWSKS=
+
+    links:
+      - postgis
+    volumes:
+      - .:/project
+    command: gretl -b /project/build.gradle --info

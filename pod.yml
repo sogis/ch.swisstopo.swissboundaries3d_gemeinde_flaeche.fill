@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: agi-gretl-test-dataintegration
+  name: ch-swisstopo-swissboundaries3d-gemeinde-flaeche-fill
+  labels:
+    jenkins: slave
+    dataset: ch.swisstopo.swissboundaries3d_gemeinde_flaeche.fill
+spec:
+  containers:
+    - name: gretl
+      image: registry.gitlab.com/geo-bl-ch/docker/gretl-runner:latest
+      command:
+        - cat
+      tty: true
+      alwaysPullImage: true
+      env:
+        - name: JAVA_OPTS
+          value: -XX:+UseContainerSupport -XX:InitialRAMPercentage=75.0 -XX:MinRAMPercentage=50.0 -XX:MaxRAMPercentage=75.0
+      resources:
+        requests:
+          cpu: 800m
+          memory: 1Gi
+        limits:
+          cpu: 800m
+          memory: 1Gi
+    - name: postgis
+      image: registry.gitlab.com/geo-bl-ch/docker/postgis:3.0-postgresql12
+      env:
+        - name: PGPASSWORD
+          value: gretl
+        - name: POSTGRESQL_USER
+          value: gretl
+        - name: POSTGRESQL_PASSWORD
+          value: gretl
+        - name: POSTGRESQL_DATABASE
+          value: gretl
+      resources:
+        requests:
+          cpu: 300m
+          memory: 320Mi
+        limits:
+          cpu: 300m
+          memory: 320Mi
+      alwaysPullImage: true
+    - name: jnlp
+      image:qgs_creator_mock jenkins/inbound-agent:4.3-8-alpine
+      env:
+        - name: HOME
+          value: /tmp
+        - name: JAVA_OPTS
+          value: -XX:+UseContainerSupport -XX:InitialRAMPercentage=75.0 -XX:MinRAMPercentage=50.0 -XX:MaxRAMPercentage=75.0
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 100m
+          memory: 256Mi
+      alwaysPullImage: true

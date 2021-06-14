@@ -1,0 +1,215 @@
+import ch.so.agi.gretl.api.*
+import ch.so.agi.gretl.tasks.*
+import java.nio.file.Paths
+import de.undercouch.gradle.tasks.download.Download
+import org.gradle.crypto.checksum.Checksum
+import groovy.io.FileType
+
+buildscript {
+	repositories {
+		flatDir {
+			dirs '/libs'
+		}
+		maven {
+			url "http://jars.interlis.ch"
+		}
+		maven {
+			url "http://jars.umleditor.org"
+		}
+		maven {
+			url "https://plugins.gradle.org/m2/"
+		}
+		maven { 
+			url "https://dl.bintray.com/sogis/iox-wkf/"
+		}
+		
+		mavenCentral()
+	}
+	dependencies {
+		classpath(
+			[group: 'ch.so.agi', name: 'gretl',  version: '2.1.83']
+		)
+		classpath "de.undercouch:gradle-download-task:4.1.1"
+	}
+}
+
+plugins {
+  id "de.undercouch.download" version "4.1.1"
+  id 'org.gradle.crypto.checksum' version '1.1.0'
+}
+
+apply plugin: "de.undercouch.download"
+apply plugin: 'ch.so.agi.gretl'
+
+defaultTasks 'uploadFeedToS3'
+
+def aws_k = "$System.env.AWSK"
+def aws_ks = "$System.env.AWSKS"
+println aws_k
+
+def input_schema = "input"
+
+def models = "swissBOUNDARIES3D_ili2_LV95_V1_3"
+
+def db_settings = ['jdbc:postgresql://postgis/gretl', 'gretl', 'gretl']
+
+def dataset = "ch.swisstopo.swissboundaries3d_gemeinde_flaeche.fill"
+def time = new Date()
+def timestamp = time.format("yyyyMMddHHmmss", TimeZone.getTimeZone('Europe/Zurich'))
+def pubDate = time.format("EEE, dd MMM yyyy HH:mm:ss Z", TimeZone.getTimeZone('Europe/Zurich'))
+
+def s3Path = "s3.eu-central-1.amazonaws.com"
+def s3Url = "https://${s3Path}"
+def s3Bucket = "ch.so.agi.integration"
+def s3DownloadUrl = "https://${s3Bucket}.${s3Path}"
+def bundle = "bundle"
+def deploy = "deploy"
+
+delete project.buildDir
+
+task downloadFederalData(type: Download){
+	def fileName = "ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill"
+	def url = "https://data.geo.admin.ch/${fileName}/xtf/2056/${fileName}.zip"
+	def path = new File(project.buildDir, name)
+    description = "Download swissBoundaries3D from swisstopo"
+    doLast {
+        println "File downloaded to: " + path
+    }
+    src url
+    dest path
+    overwrite true
+	outputs.file(file("${path}/${fileName}.zip"))
+}
+
+
+task unzipSwissBoundaries3D(type: Copy, dependsOn: 'downloadFederalData'){
+	def xtfInputFile = "swissBOUNDARIES3D_1_3.xtf"
+	def xtfOutputFile = "${dataset}_${timestamp}.xtf"
+	def iliFile = "swissBOUNDARIES3D_ili2_LV95_V1_3.ili"
+	def path = new File(project.buildDir, name)
+    description = "Unzip to ${path}"
+    doLast {
+        println "File unzipped to directory: " + path
+    }
+    from zipTree(downloadFederalData.outputs.files[0])
+    into file(path)
+    include "**/*.*"
+	rename { filename ->
+        filename.replace xtfInputFile, xtfOutputFile
+    }
+	outputs.file(file("${path}/${xtfOutputFile}"))
+	outputs.file(file("${path}/${iliFile}"))
+}
+
+task createChecksums(type: Checksum, dependsOn: 'unzipSwissBoundaries3D') {
+  	files = files(unzipSwissBoundaries3D.outputs.files[0])
+  	outputDir = new File(project.buildDir, bundle)
+  	algorithm = Checksum.Algorithm.SHA512
+}
+
+// task validate(type: IliValidator, dependsOn: 'unzipSwissBoundaries3D'){
+// 	def path = new File(project.buildDir, name)
+// 	path.mkdirs()
+//     dataFiles = [unzipSwissBoundaries3D.outputs.files[0]]
+//     logFile = file("${path}/ilivalidator.log")
+// }
+
+task importInputSchema(type: Ili2pgImportSchema, dependsOn: 'createChecksums'){
+	def path = new File(project.buildDir, name)
+	path.mkdirs()
+    database = db_settings
+    iliFile = unzipSwissBoundaries3D.outputs.files[1]
+    dbschema = input_schema
+	disableValidation = true
+	defaultSrsAuth = "EPSG"
+	defaultSrsCode = "2056"
+    logFile = file("${path}/ili2pg.log")
+}
+
+task dbImport(type: Ili2pgImport, dependsOn: 'importInputSchema'){
+	def path = new File(project.buildDir, name)
+    description = "Import swissBoundaries3D-Data into database"
+    doLast {
+        println "Data imported into db"
+    }
+    database = db_settings
+    dbschema = input_schema
+    models = models
+    dataFile = unzipSwissBoundaries3D.outputs.files[0]
+}
+
+task checkPostGISValidity(type: SqlExecutor, dependsOn: 'dbImport'){
+    database = db_settings
+    sqlFiles = [
+		'test_bezirk.sql',
+		'test_hoheitsgebiet.sql',
+		'test_kanton.sql',
+		'test_land.sql'
+	]
+}
+
+task bundleData(type: Copy, dependsOn: 'checkPostGISValidity'){
+	def path = new File(project.buildDir, bundle)
+	from unzipSwissBoundaries3D.outputs.files[0]
+	into path
+}
+
+task bundleModels(type: Copy, dependsOn: 'bundleData'){
+	def path = "${project.buildDir}/${bundle}"
+	def modelsPath = new File(path, 'models')
+	modelsPath.mkdirs()
+	from fileTree("/tmp").include("**/*.ili").files
+	into modelsPath
+}
+
+task zipBundle(type: Zip, dependsOn: 'bundleModels') {
+	def path = new File(project.buildDir, deploy)
+	path.mkdirs()
+   	from "${project.buildDir}/${bundle}"
+   	include '*'
+   	include '*/*'
+   	archiveName "${dataset}_${timestamp}.zip"
+   	destinationDir path
+}
+
+task createFeedItem (dependsOn: 'zipBundle') {
+	doLast{
+		def content = [
+			"<item>\n",
+			"  <guid isPermaLink=\"true\">${dataset}_${timestamp}</guid>\n",
+			"  <title>${dataset}_${timestamp}.xtf</title>\n",
+			"  <description>${dataset}_${timestamp}.xtf.sha512</description>\n",
+			"  <link>${s3DownloadUrl}/${dataset}_${timestamp}.zip</link>\n",
+			"  <pubDate>${pubDate}</pubDate>\n",
+			"</item>\n"
+		]
+		def feedItem = new File("${project.buildDir}/${deploy}", "${dataset}_${timestamp}_feed.xml")
+		content.each{ line -> 
+			feedItem.append(line)
+		}
+	}
+}
+
+task uploadZipToS3(type: S3Upload, dependsOn: "createFeedItem") {
+	def uploadFile = zipBundle.outputs.files[0]
+	accessKey = aws_k
+    secretKey = aws_ks
+    sourceFile = file("${project.buildDir}/deploy/${dataset}_${timestamp}.zip")
+    bucketName = "ch.so.agi.integration-test"
+    endPoint = "https://s3.eu-central-1.amazonaws.com" 
+    region = "eu-central-1"
+    acl = "public-read"
+    contentType = "application/octect-stream"
+}
+
+task uploadFeedToS3(type: S3Upload, dependsOn: "uploadZipToS3") {
+	def uploadFile = zipBundle.outputs.files[0]
+	accessKey = aws_k
+    secretKey = aws_ks
+    sourceFile = file("${project.buildDir}/deploy/${dataset}_${timestamp}_feed.xml")
+    bucketName = "ch.so.agi.integration-test"
+    endPoint = "https://s3.eu-central-1.amazonaws.com" 
+    region = "eu-central-1"
+    acl = "public-read"
+    contentType = "text/xml"
+}

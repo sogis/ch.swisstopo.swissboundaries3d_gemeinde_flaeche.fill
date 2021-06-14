@@ -1,0 +1,1 @@
+select count(DISTINCT st_isvalid(shape)) as valid_count from input.tlm_bezirksgebiet;

@@ -1,0 +1,8 @@
+/.vscode
+/.idea
+/.venv
+/integration.yml
+/geocat.xml
+/ech-0166
+/build
+/.gradle

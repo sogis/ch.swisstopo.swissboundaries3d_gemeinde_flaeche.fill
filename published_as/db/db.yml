@@ -1,0 +1,90 @@
+unqualified_imports:
+  - "GeometryCHLV95_V1"
+  - "CHAdminCodes_V1"
+imports: []
+depends_on: []
+layers:
+  - name: "gemeindegrenzen_basel_land"
+    description: "Gemeindegrenzen des Kantons Basel-Landschaft in 2D"
+    roles:
+      - "gdwh_open_group_r"
+    access_authorisation_level: "Zugangsberechtigungsstufe A - Die Geodaten sind nicht öffentlich zugänglich. Es gelten die Nutzungsbedingungen des Kantons Basel-Landschaft."
+    horizontal_srs: EPSG:2056
+    vertical_srs:
+    geometry_column: geom
+    id_column: "gemeinde_id_bfs"
+    columns:
+      - name: "gemeindename"
+        data_type: "TEXT"
+      - name: "gemeinde_id_bfs"
+        data_type: "CHAdminCodes_V1.CHMunicipalityCode"
+      - name: "geom"
+        data_type: "MultiSurface"
+  - name: "kantonsgrenzen_basel_land"
+    description: "Kantonsgrenzen des Kantons Basel-Landschaft in 2D"
+    roles:
+      - "gdwh_open_group_r"
+    access_authorisation_level: "Zugangsberechtigungsstufe A - Die Geodaten sind nicht öffentlich zugänglich. Es gelten die Nutzungsbedingungen des Kantons Basel-Landschaft."
+    horizontal_srs: EPSG:2056
+    vertical_srs:
+    geometry_column: geom
+    id_column: "kanton_id_bfs"
+    columns:
+      - name: "kantonsname"
+        data_type: "TEXT"
+      - name: "kanton_id_bfs"
+        data_type: "CHAdminCodes_V1.CHMunicipalityCode"
+      - name: "geom"
+        data_type: "MultiSurface"
+  - name: "kantonsgrenzen_schweiz"
+    description: "Kantonsgrenzen der Schweiz in 2D"
+    roles:
+      - "gdwh_open_group_r"
+    access_authorisation_level: "Zugangsberechtigungsstufe A - Die Geodaten sind nicht öffentlich zugänglich. Es gelten die Nutzungsbedingungen des Kantons Basel-Landschaft."
+    horizontal_srs: EPSG:2056
+    vertical_srs:
+    geometry_column: geom
+    id_column: "kanton_id_bfs"
+    columns:
+      - name: "kantonsname"
+        data_type: "TEXT"
+      - name: "kanton_id_bfs"
+        data_type: "CHAdminCodes_V1.CHMunicipalityCode"
+      - name: "geom"
+        data_type: "MultiSurface"
+  - name: "gemeindegrenzen_schweiz"
+    description: "Gemeindegrenzen der gesamten Schweiz in 2D"
+    roles:
+      - "gdwh_open_group_r"
+    access_authorisation_level: "Zugangsberechtigungsstufe A - Die Geodaten sind nicht öffentlich zugänglich. Es gelten die Nutzungsbedingungen des Kantons Basel-Landschaft."
+    horizontal_srs: EPSG:2056
+    vertical_srs:
+    geometry_column: geom
+    id_column: "t_id"
+    columns:
+      - name: "gemeindename"
+        data_type: "TEXT"
+      - name: "gemeinde_id_bfs"
+        data_type: "CHAdminCodes_V1.CHMunicipalityCode"
+      - name: "kanton_id_bfs"
+        data_type: "1..99"
+      - name: "kantonsname"
+        data_type: "TEXT"
+      - name: "objektart"
+        data_type: "TEXT"
+      - name: "geom"
+        data_type: "MultiSurface"
+  - name: "landesgrenze_schweiz"
+    description: "Landesgrenze der Schweiz in 2D"
+    roles:
+      - "gdwh_open_group_r"
+    access_authorisation_level: "Zugangsberechtigungsstufe A - Die Geodaten sind nicht öffentlich zugänglich. Es gelten die Nutzungsbedingungen des Kantons Basel-Landschaft."
+    horizontal_srs: EPSG:2056
+    vertical_srs:
+    geometry_column: geom
+    id_column: "t_id"
+    columns:
+      - name: "landesname"
+        data_type: "TEXT"
+      - name: "geom"
+        data_type: "Surface"

@@ -1,0 +1,281 @@
+def dataset = "ch.swisstopo.swissboundaries3d_gemeinde_flaeche.fill"
+def downloadDataset = "ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill"
+def downloadName = "ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill"
+
+def downloadFileName = "${downloadName}.zip"
+def downloadUrl = "https://data.geo.admin.ch/${downloadDataset}/xtf/2056"
+
+def rssUrl = 'https://rss-server-vgd-agi-datenintegration.apps.ocp.bl.ch/integration/' + dataset
+
+def releaseUrl = "https://gitlab.com/api/v4/projects/22032442/packages/generic/descritpion/0.0.0/release.zip"
+
+def time = new Date()
+def timestamp = time.format("yyyyMMddHHmmss", TimeZone.getTimeZone('Europe/Zurich'))
+def pubDate = time.format("EEE, dd MMM yyyy HH:mm:ss Z", TimeZone.getTimeZone('Europe/Zurich'))
+
+def data_id_db = "${dataset}_db_${timestamp}"
+def data_id_wms = "${dataset}_wms_${timestamp}"
+
+pipeline {
+
+    agent {
+        kubernetes {
+            cloud 'openshift'
+            yamlFile 'pod.yml'
+        }
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '3'))
+    }
+
+    triggers {
+        URLTrigger(
+            cronTabSpec: 'TZ=Europe/Zurich\nH/5 * * * *',
+            entries: [
+                URLTriggerEntry(
+                    url: "${rssUrl}",
+                    contentTypes: [
+                        XMLContent([
+                            XMLContentEntry(xPath: '/rss/channel[1]/item[last()]')
+                        ])
+                    ]
+                )
+            ]
+        )
+    }
+
+    stages {
+        stage('Preparation') {
+            steps {
+                container('gretl'){
+                    sh  label: "Download Release",
+                        script: """
+                            curl --header "PRIVATE-TOKEN: xxwFngssuUgUQYYSbxEC" --output release.zip ${releaseUrl}
+                            unzip release.zip
+                        """
+                    sh  label: "Download ili2pg",
+                        script: """
+                            wget -O ili2pg.zip -v -e use_proxy=on -e http_proxy=127.0.0.1:8088 -e https_proxy=127.0.0.1:8088 http://www.eisenhutinformatik.ch/interlis/ili2pg/ili2pg-4.4.2.zip
+                            unzip ili2pg.zip -d ./ili2pg
+                            mv ili2pg/ili2pg-4.4.2.jar ili2pg/ili2pg.jar
+                        """
+                    sh  label: "Download ili2gpkg",
+                        script: """
+                            wget -O ili2gpkg.zip -v -e use_proxy=on -e http_proxy=127.0.0.1:8088 -e https_proxy=127.0.0.1:8088 http://www.eisenhutinformatik.ch/interlis/ili2gpkg/ili2gpkg-4.4.2.zip
+                            unzip ili2gpkg.zip -d ./ili2gpkg
+                            mv ili2gpkg/ili2gpkg-4.4.2.jar ili2gpkg/ili2gpkg.jar
+                        """
+                }
+              }
+          }
+
+        stage('Initialization') {
+            steps {
+                container('gretl') {
+                    sh  label: "Prepare gradle",
+                        script: """
+                            cp /config/gradle.properties .
+                            gradle --version
+                        """
+                    sh  label: "Download input data",
+                        script: """
+                            mkdir input
+                            curl ${rssUrl} --verbose --output feed.xml
+                            export DOWNLOAD_LINK=\$(xmlstarlet sel -t -v '/rss/channel[1]/item[last()]/link/text()' feed.xml)
+                            export INPUT_FILE=\$(xmlstarlet sel -t -v '/rss/channel[1]/item[last()]/title/text()' feed.xml)
+                            echo "Download link: \$DOWNLOAD_LINK"
+                            echo "Input file: \$INPUT_FILE"
+                            curl \$DOWNLOAD_LINK --verbose --output input.zip
+                            unzip input.zip -d ./input
+                            mv ./input/\$INPUT_FILE ./input/input.xtf
+                            rm -f input.zip feed.xml
+                            ls -ls 
+                        """
+                }
+                container('postgis') {
+                    sh  label: "Wait for database to be ready",
+                        script: """
+                            until /usr/local/bin/is_ready; do echo 'Waiting for database...'; sleep 3; done
+                            echo "Database is ready. Continue with pipeline..."
+                        """
+                }
+            }
+        }
+
+        stage('Prepare Database') {
+            steps {
+                container('gretl') {
+                    sh  label: "Import input schema",
+                        script: """
+                            java -jar ili2pg/ili2pg.jar --dbdatabase gretl --dbusr gretl --dbpwd gretl --dbschema gretl_input --defaultSrsAuth EPSG --defaultSrsCode 2056 --schemaimport --createFk --proxy 127.0.0.1 --proxyPort 8088 input/models/swissBOUNDARIES3D_ili2_LV95_V1_3.ili
+                        """
+                    sh  label: "Import input data",
+                        script: """
+                            java -jar ili2pg/ili2pg.jar --dbdatabase gretl --dbusr gretl --dbpwd gretl --dbschema gretl_input --import --proxy 127.0.0.1 --proxyPort 8088 input/input.xtf
+                        """
+                    sh  label: "Import output schema DB",
+                        script: """
+                            java -jar ili2pg/ili2pg.jar --dbdatabase gretl --dbusr gretl --dbpwd gretl --dbschema output_db --defaultSrsAuth EPSG --defaultSrsCode 2056 --schemaimport --createFk --proxy 127.0.0.1 --proxyPort 8088 \$(find release/ili/ -name '*_db_*.ili')
+                        """
+                    sh  label: "Prepare output GeoPackage DB",
+                        script: """
+                            java -jar ili2gpkg/ili2gpkg.jar --schemaimport --dbfile output_db.gpkg --defaultSrsAuth EPSG --defaultSrsCode 2056 --proxy 127.0.0.1 --proxyPort 8088 \$(find release/ili/ -name '*_db_*.ili')
+                        """
+                    sh  label: "Import output schema WMS",
+                        script: """
+                            java -jar ili2pg/ili2pg.jar --dbdatabase gretl --dbusr gretl --dbpwd gretl --dbschema output_wms --defaultSrsAuth EPSG --defaultSrsCode 2056 --schemaimport --createFk --proxy 127.0.0.1 --proxyPort 8088 \$(find release/ili/ -name '*_wms_*.ili')
+                        """
+                    sh  label: "Prepare output GeoPackage WMS",
+                        script: """
+                            java -jar ili2gpkg/ili2gpkg.jar --schemaimport --dbfile output_wms.gpkg --defaultSrsAuth EPSG --defaultSrsCode 2056 --proxy 127.0.0.1 --proxyPort 8088 \$(find release/ili/ -name '*_wms_*.ili')
+                        """
+                }
+            }
+        }
+        
+        stage('Run gretl job') {
+            steps {
+                container('gretl') {
+                    sh  label: "Run gretl job",
+                        script: """
+                            cat gradle.properties
+                            gretl --info --stacktrace --scan --build-file published_as/db/build.gradle
+                        """
+                    sh  label: "Run gretl job",
+                        script: """
+                            cat gradle.properties
+                            gretl --info --stacktrace --scan --build-file published_as/wms/build.gradle
+                        """
+                }
+            }
+        }
+
+        stage('Prepare Output') {
+            steps {
+                container('gretl') {
+                    sh  label: "Export output data DB",
+                        script: """
+                            java -jar ili2pg/ili2pg.jar --dbdatabase gretl --dbusr gretl --dbpwd gretl --dbschema output_db --export --proxy 127.0.0.1 --proxyPort 8088 --models \$(cd release/ili/ && ls *_db_*.ili | cut -d. -f1) output_db.xtf
+                        """
+                    sh  label: "Export output data to GeoPackage DB",
+                        script: """
+                            java -jar ili2gpkg/ili2gpkg.jar --import --dbfile output_db.gpkg --proxy 127.0.0.1 --proxyPort 8088 output_db.xtf
+                        """
+                    sh  label: "Export output data WMS",
+                        script: """
+                            java -jar ili2pg/ili2pg.jar --dbdatabase gretl --dbusr gretl --dbpwd gretl --dbschema output_wms --export --proxy 127.0.0.1 --proxyPort 8088 --models \$(cd release/ili/ && ls *_wms_*.ili | cut -d. -f1) output_wms.xtf
+                        """
+                    sh  label: "Export output data to GeoPackage WMS",
+                        script: """
+                            java -jar ili2gpkg/ili2gpkg.jar --import --dbfile output_wms.gpkg --proxy 127.0.0.1 --proxyPort 8088 output_wms.xtf
+                        """
+                }
+            }
+        }
+
+        stage('Deploy result') {
+            environment {
+                DATA_ID_DB = "${data_id_db}"
+                DATA_FILE_DB = "${data_id_db}.gpkg"
+                HASH_FILE_DB = "${data_id_db}.gpkg.txt"
+                ZIP_FILE_DB = "${data_id_db}.zip"
+                FEED_FILE_DB = "${data_id_db}_feed.xml"
+                DATA_ID_WMS = "${data_id_wms}"
+                DATA_FILE_WMS = "${data_id_wms}.gpkg"
+                HASH_FILE_WMS = "${data_id_wms}.gpkg.txt"
+                ZIP_FILE_WMS = "${data_id_wms}.zip"
+                FEED_FILE_WMS = "${data_id_wms}_feed.xml"
+                QGIS_FILE_WMS = "${data_id_wms}.qgs"
+            }
+            steps {
+                container('gretl') {
+                    sh  label: "Create deployment directory",
+                        script: "mkdir deploy"
+
+                    sh  label: "Bundle models",
+                        script: '''
+                            mkdir models
+                            cp $(find ./release/ -name '*_db_*.ili') models/
+                            zip -r ./deploy/$ZIP_FILE_DB models
+                            rm -rf models
+                        '''
+
+                    sh  label: "Rename input file",
+                        script: '''
+                            mv output_db.gpkg $DATA_FILE_DB
+                            zip -r ./deploy/$ZIP_FILE_DB $DATA_FILE_DB
+                        '''
+
+                    sh  label: "Generate checksum",
+                        script: '''
+                            md5sum $DATA_FILE_DB | awk '{print \$1}' > $HASH_FILE_DB
+                            zip -r ./deploy/$ZIP_FILE_DB $HASH_FILE_DB
+                        '''
+                    
+                    sh  label: "Create feed item",
+                        script: """
+                            tpage \\
+                                --define guid=\$DATA_ID_DB \\
+                                --define title=\$DATA_FILE_DB \\
+                                --define description=\$(cat \$HASH_FILE_DB) \\
+                                --define link=\"https://download-server-vgd-agi-datenintegration.apps.ocp.bl.ch/publikation/\$ZIP_FILE_DB\" \\
+                                --define pubDate=\"${pubDate}\" \\
+                                --interpolate ./feed_item.xml \\
+                                > ./deploy/\$FEED_FILE_DB
+                        """
+
+                    sh  label: "Bundle models",
+                        script: '''
+                            mkdir models
+                            cp $(find ./release/ -name '*_wms_*.ili') models/
+                            zip -r ./deploy/$ZIP_FILE_WMS models
+                            rm -rf models
+                        '''
+
+                    sh  label: "Rename input file",
+                        script: '''
+                            mv output_wms.gpkg $DATA_FILE_WMS
+                            zip -r ./deploy/$ZIP_FILE_WMS $DATA_FILE_WMS
+                        '''
+
+                    sh  label: "Generate checksum",
+                        script: '''
+                            md5sum $DATA_FILE_WMS | awk '{print \$1}' > $HASH_FILE_WMS
+                            zip -r ./deploy/$ZIP_FILE_WMS $HASH_FILE_WMS
+                        '''
+                    
+                    sh  label: "Create feed item",
+                        script: """
+                            tpage \\
+                                --define guid=\$DATA_ID_WMS \\
+                                --define title=\$DATA_FILE_WMS \\
+                                --define description=\$(cat \$HASH_FILE_WMS) \\
+                                --define link=\"https://download-server-vgd-agi-datenintegration.apps.ocp.bl.ch/publikation/\$ZIP_FILE_WMS\" \\
+                                --define pubDate=\"${pubDate}\" \\
+                                --interpolate ./feed_item.xml \\
+                                > ./deploy/\$FEED_FILE_WMS
+                        """
+                    
+                    sh  label: "Fill up gpkg name into QGIS-Project",
+                        script: """
+                            tpage \\
+                                --define gpkg_name=\$DATA_FILE_WMS \\
+                                --interpolate ./published_as/wms/wms.qgs \\
+                                > \$QGIS_FILE_WMS
+                            zip -r ./deploy/$ZIP_FILE_WMS $QGIS_FILE_WMS
+                        """
+                    
+                    sh  label: "Deploy results to /integrated-data/publikation",
+                        script: """
+                            ls -ls ./deploy
+                            cp ./deploy/* /integrated-data/publikation/
+                        """
+                }
+            }
+        }
+
+
+    }
+
+}

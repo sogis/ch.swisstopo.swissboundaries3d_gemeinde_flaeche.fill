@@ -1,0 +1,7 @@
+    <item>
+      <guid isPermaLink="true">[% guid %]</guid>
+      <title>[% title %]</title>
+      <description>[% description %]</description>
+      <link>[% link %]</link>
+      <pubDate>[% pubDate %]</pubDate>
+    </item>
